@@ -1,20 +1,11 @@
 from flask import Flask, request, redirect, jsonify
 import yt_dlp
-import subprocess
 
 app = Flask(__name__)
-
-# 🔥 ACTUALIZAR yt-dlp correctamente (clave real)
-try:
-    subprocess.run(["pip", "install", "-U", "yt-dlp"], check=True)
-except:
-    pass
-
 
 @app.route('/ping')
 def ping():
     return "ok"
-
 
 @app.route('/api/play')
 def play_video():
@@ -29,14 +20,9 @@ def play_video():
         'quiet': True,
         'no_warnings': True,
         'nocheckcertificate': True,
-        'format': 'bestaudio/best',
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'web']
-            }
-        },
+        'format': 'best',
         'http_headers': {
-            'User-Agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11)'
+            'User-Agent': 'Mozilla/5.0'
         }
     }
 
@@ -44,7 +30,7 @@ def play_video():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(youtube_url, download=False)
 
-            # 🔥 PRIORIDAD: formatos m3u8 (para VLC)
+            # 🔥 buscar m3u8 primero
             for f in info.get('formats', []):
                 url = f.get('url')
                 if url and "m3u8" in url:
@@ -54,13 +40,10 @@ def play_video():
             if info.get('url'):
                 return redirect(info['url'], code=302)
 
-            return jsonify({"error": "No stream disponible"}), 404
+            return jsonify({"error": "No stream"}), 404
 
     except Exception as e:
-        return jsonify({
-            "error": "yt-dlp fallo",
-            "detalle": str(e)
-        }), 500
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':
