@@ -1,15 +1,21 @@
 from flask import Flask, request, redirect, jsonify
 import yt_dlp
+import subprocess
 
 app = Flask(__name__)
 
-# 🔥 Endpoint para mantener vivo el servidor (cron-job)
+# 🔥 ACTUALIZAR yt-dlp correctamente (clave real)
+try:
+    subprocess.run(["pip", "install", "-U", "yt-dlp"], check=True)
+except:
+    pass
+
+
 @app.route('/ping')
 def ping():
     return "ok"
 
 
-# 🎬 Endpoint principal para reproducir YouTube como IPTV
 @app.route('/api/play')
 def play_video():
     video_id = request.args.get('id')
@@ -20,12 +26,17 @@ def play_video():
     youtube_url = f"https://www.youtube.com/watch?v={video_id}"
 
     ydl_opts = {
-        'format': 'bestvideo+bestaudio/best',
         'quiet': True,
         'no_warnings': True,
         'nocheckcertificate': True,
+        'format': 'bestaudio/best',
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web']
+            }
+        },
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0'
+            'User-Agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11)'
         }
     }
 
@@ -33,29 +44,24 @@ def play_video():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(youtube_url, download=False)
 
-            formats = info.get('formats', [])
-            m3u8_url = None
+            # 🔥 PRIORIDAD: formatos m3u8 (para VLC)
+            for f in info.get('formats', []):
+                url = f.get('url')
+                if url and "m3u8" in url:
+                    return redirect(url, code=302)
 
-            # 🔍 buscar stream m3u8 (ideal para VLC y lives)
-            for f in formats:
-                url = f.get('url', '')
-                if f.get('protocol') == 'm3u8' or 'm3u8' in url:
-                    m3u8_url = url
-                    break
+            # 🔁 fallback
+            if info.get('url'):
+                return redirect(info['url'], code=302)
 
-            # 🔁 fallback si no encuentra m3u8
-            if not m3u8_url:
-                m3u8_url = info.get('url')
-
-            if m3u8_url:
-                return redirect(m3u8_url, code=302)
-            else:
-                return jsonify({"error": "No se encontró stream"}), 404
+            return jsonify({"error": "No stream disponible"}), 404
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "error": "yt-dlp fallo",
+            "detalle": str(e)
+        }), 500
 
 
-# 🚀 Arranque para local (Render usa gunicorn)
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
