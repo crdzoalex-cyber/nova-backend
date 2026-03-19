@@ -1,37 +1,56 @@
-from flask import Flask, request, redirect
+from flask import Flask, request, redirect, jsonify
 import yt_dlp
 
 app = Flask(__name__)
 
+@app.route('/')
+def home():
+    return "Servidor IPTV activo 🚀"
+
 @app.route('/api/play')
 def play_video():
-    # 1. Recibimos el ID del video que nos manda tu app Android
     video_id = request.args.get('id')
+
     if not video_id:
-        return "Falta el ID del video", 400
+        return jsonify({"error": "Falta el ID"}), 400
 
     youtube_url = f"https://www.youtube.com/watch?v={video_id}"
 
-    # 2. Configuramos el tanque para sacar el Vivo en mejor calidad
     ydl_opts = {
-        'format': 'best[protocol^=m3u8]', 
+        'format': 'bestvideo+bestaudio/best',
         'quiet': True,
         'no_warnings': True,
+        'nocheckcertificate': True,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0'
+        }
     }
 
-    # 3. ¡Fuego! Extraemos el link puro
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(youtube_url, download=False)
-            m3u8_url = info_dict.get('url', None)
+            info = ydl.extract_info(youtube_url, download=False)
+
+            formats = info.get('formats', [])
+            m3u8_url = None
+
+            for f in formats:
+                url = f.get('url', '')
+                if f.get('protocol') == 'm3u8' or 'm3u8' in url:
+                    m3u8_url = url
+                    break
+
+            # fallback
+            if not m3u8_url:
+                m3u8_url = info.get('url')
 
             if m3u8_url:
-                # 🔥 LA MAGIA: Redirigimos al VLC directamente al video puro
                 return redirect(m3u8_url, code=302)
             else:
-                return "No se pudo encontrar el link m3u8", 404
+                return jsonify({"error": "No se encontró stream"}), 404
+
     except Exception as e:
-        return f"Error en el servidor: {str(e)}", 500
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
