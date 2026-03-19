@@ -3,10 +3,13 @@ import yt_dlp
 
 app = Flask(__name__)
 
-@app.route('/')
-def home():
-    return "Servidor IPTV activo 🚀"
+# 🔥 Endpoint para mantener vivo el servidor (cron-job)
+@app.route('/ping')
+def ping():
+    return "ok"
 
+
+# 🎬 Endpoint principal para reproducir YouTube como IPTV
 @app.route('/api/play')
 def play_video():
     video_id = request.args.get('id')
@@ -33,13 +36,14 @@ def play_video():
             formats = info.get('formats', [])
             m3u8_url = None
 
+            # 🔍 buscar stream m3u8 (ideal para VLC y lives)
             for f in formats:
                 url = f.get('url', '')
                 if f.get('protocol') == 'm3u8' or 'm3u8' in url:
                     m3u8_url = url
                     break
 
-            # fallback
+            # 🔁 fallback si no encuentra m3u8
             if not m3u8_url:
                 m3u8_url = info.get('url')
 
@@ -52,5 +56,6 @@ def play_video():
         return jsonify({"error": str(e)}), 500
 
 
+# 🚀 Arranque para local (Render usa gunicorn)
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
